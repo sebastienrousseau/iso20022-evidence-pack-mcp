@@ -1,0 +1,48 @@
+{
+  "$schema": "https://glama.ai/api/mcp/v1/schemas/glama.json",
+  "maintainers": [
+    "sebastienrousseau"
+  ],
+  "title": "iso20022-evidence-pack-mcp",
+  "display_name": "ISO 20022 Evidence Pack MCP",
+  "description": "Fully local, closed-world Model Context Protocol server for the ISO 20022 MCP Suite: the audit and certification sibling of iso20022-readiness-suite-mcp. It compiles a readiness result, remediation diffs, and simulated bank responses into one sealed, exportable audit evidence pack. The seal is a deterministic SHA-256 digest over the pack's canonical JSON (digest field excluded), making the pack tamper-evident: re-sealing identical content yields the identical digest, and changing any field breaks verification. No network surface, no sub-servers, no XML. Exposes 4 read-only tools over stdio: fold a graded, sealed pack from readiness/remediation/simulation inputs (build_evidence_pack); compute a pack's deterministic seal (seal_pack); recompute and compare a seal to an expected digest (verify_seal); render a pack as a markdown compliance report (render_markdown). The seal is an integrity digest for tamper-evidence, not a cryptographic signature; signing (keys/PKI) is a roadmap item. SLSA Build L3 provenance + PEP 740 sigstore attestations + CycloneDX/SPDX/licenses SBOMs on every release; NIST SP 800-218 SSDF practice IDs mapped in SECURITY.md.",
+  "version": "0.0.1",
+  "repository": "https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp",
+  "homepage": "https://sebastienrousseau.github.io/iso20022-evidence-pack-mcp/",
+  "license": "Apache-2.0",
+  "language": "Python",
+  "runtime": "python",
+  "categories": [
+    "finance"
+  ],
+  "tags": [
+    "iso20022",
+    "audit",
+    "evidence-pack",
+    "compliance",
+    "certification",
+    "tamper-evident",
+    "sha256",
+    "seal",
+    "readiness",
+    "remediation",
+    "cbpr-plus",
+    "sepa-instant",
+    "fednow",
+    "nov-2026-cliff",
+    "payment-validation",
+    "fastmcp",
+    "financial-services",
+    "fintech",
+    "slsa",
+    "sigstore"
+  ],
+  "mcpServers": {
+    "iso20022-evidence-pack": {
+      "command": "iso20022-evidence-pack-mcp"
+    }
+  },
+  "installation": {
+    "pip": "pip install iso20022-evidence-pack-mcp"
+  }
+}

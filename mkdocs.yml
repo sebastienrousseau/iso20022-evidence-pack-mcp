@@ -1,0 +1,49 @@
+site_name: iso20022-evidence-pack-mcp
+site_description: >-
+  Fully local, closed-world MCP server that seals ISO 20022 readiness evidence
+  into tamper-evident, exportable audit packs. The audit and certification
+  sibling of the ISO 20022 MCP Suite.
+site_url: https://sebastienrousseau.github.io/iso20022-evidence-pack-mcp/
+repo_url: https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp
+repo_name: sebastienrousseau/iso20022-evidence-pack-mcp
+copyright: Copyright &copy; 2023-2026 Sebastien Rousseau — Apache-2.0
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Evidence packs: evidence-packs.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+
+plugins:
+  - search
