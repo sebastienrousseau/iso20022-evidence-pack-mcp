@@ -18,6 +18,7 @@ python examples/<name>.py
 | [`06_render_markdown.py`](06_render_markdown.py) | Render a pack as a markdown compliance report |
 | [`07_grade_bands.py`](07_grade_bands.py) | Walk readiness scores through the A/B/C/F grade bands |
 | [`08_roundtrip_readiness.py`](08_roundtrip_readiness.py) | Full readiness → evidence → seal → verify round trip |
+| [`09_sign_and_verify.py`](09_sign_and_verify.py) | Ed25519-sign a pack, verify it, and detect a tampered field |
 
 ## Tamper-evidence
 
