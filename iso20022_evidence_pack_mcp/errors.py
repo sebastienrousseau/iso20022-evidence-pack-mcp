@@ -80,3 +80,9 @@ class SealMismatchError(EvidencePackError):
     """A pack's recomputed digest did not match the expected seal."""
 
     code = "EP_SEAL_MISMATCH"
+
+
+class NoSigningKeyError(EvidencePackError):
+    """No Ed25519 signing key is configured for this server."""
+
+    code = "EP_NO_SIGNING_KEY"

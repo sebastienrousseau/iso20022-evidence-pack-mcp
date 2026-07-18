@@ -4,8 +4,8 @@ An **evidence pack** is the exportable audit artifact this server produces. It
 folds a readiness result, an optional remediation result, and any simulated
 bank responses into one strongly-typed, graded, **sealed** document. This page
 covers the pack schema, the deterministic SHA-256 sealing model, why that makes
-a pack tamper-evident, the seal-vs-signature caveat, and how the pack fits the
-readiness → evidence pipeline.
+a pack tamper-evident, the seal-vs-signature distinction, Ed25519 signing, and
+how the pack fits the readiness → evidence pipeline.
 
 ## The pack schema
 
@@ -137,12 +137,71 @@ unnoticed.
     pack (authenticity). Anyone who can build a pack can also compute a valid
     seal for it, so the seal is a checksum, not a proof of origin.
 
-Establishing authenticity — binding a pack to an operator identity via keys /
-PKI — is explicitly a **roadmap** item and, until it ships, the operator's
-responsibility. Treat a sealed pack as integrity-checked, transmit and store it
-over channels you already trust, and do not represent it as a signed one. See
-the threat-model note in
+Establishing **authenticity** — binding a pack to a specific key — is what
+[cryptographic signing](#cryptographic-signing) adds on top of the seal: an
+Ed25519 signature over the pack's canonical bytes attests that the holder of the
+operator's key produced that content. Until you have configured a signing key (or
+if you rely on the seal alone), treat a sealed-but-unsigned pack as
+integrity-checked only: transmit and store it over channels you already trust,
+and do not represent it as a signed one. See the threat-model note in
 [`SECURITY.md`](https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp/blob/main/SECURITY.md).
+
+## Cryptographic signing
+
+The seal proves **integrity**; a **signature** proves **authenticity** — that a
+specific key attests to the pack's content. Two tools add Ed25519 signing:
+
+| Tool | What it does |
+| --- | --- |
+| `sign_pack` | Sign a pack's canonical bytes with the operator's Ed25519 private key. Returns the base64 detached signature, `algorithm` `"ed25519"`, the PEM public key, and a `key_id` (`ed25519:<16 hex>`). |
+| `verify_pack_signature` | Verify a detached signature over a pack's canonical bytes against a **public** key passed as a tool argument. Returns `verified` and `key_id`. |
+
+### Canonical-bytes binding
+
+`sign_pack` signs the **exact same canonical bytes the seal digests** — the
+pack serialised with sorted keys and tight separators, **with the `digest` field
+excluded** (see [The sealing model](#the-sealing-model)). Two consequences
+follow directly from that choice:
+
+- A signature **stays valid when only the `digest` field changes** — signature
+  and seal cover the same content, so re-sealing a pack does not invalidate its
+  signature.
+- A signature **breaks if any sealed field changes** — exactly the fields the
+  seal protects are the fields the signature attests to.
+
+`verify_pack_signature` recomputes those same canonical bytes and checks the
+detached signature against the supplied public key.
+
+### Configuring the signing key
+
+The Ed25519 **private key is configured by the operator at launch**, through the
+environment — never as a tool argument:
+
+| Variable | Meaning |
+| --- | --- |
+| `ISO20022_EVIDENCE_PACK_SIGNING_KEY` | The PEM Ed25519 private key, inline. |
+| `ISO20022_EVIDENCE_PACK_SIGNING_KEY_FILE` | A path to a PEM Ed25519 private-key file. |
+
+The inline key is read first, then the key-file path. **The private key never
+crosses the MCP tool boundary**: `sign_pack` returns only the *public* key and
+the signature, and the server never generates or persists private keys — key
+material is generated and custodied by the operator, ideally in an HSM/KMS.
+
+Verification, by contrast, needs only the **public** key, which is safe to pass
+as a tool argument.
+
+### Errors
+
+- With **no signing key configured**, `sign_pack` returns `EP_NO_SIGNING_KEY`.
+- A **malformed** public key or signature encoding returns `EP_INVALID_INPUT`
+  (as opposed to a well-formed signature that simply does not verify, which
+  returns `verified: false`).
+
+!!! note "What signing does *not* yet establish"
+    A signature is only as trustworthy as your provenance for the public key.
+    Keyless (sigstore) and PKI signing with a verification **trust root** remain
+    [roadmap](https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp/blob/main/ROADMAP.md)
+    items.
 
 ## The readiness → evidence pipeline
 

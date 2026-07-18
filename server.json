@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.sebastienrousseau/iso20022-evidence-pack-mcp",
-  "description": "Local MCP server: seal ISO 20022 readiness evidence into tamper-evident audit packs.",
+  "description": "MCP server: seal & sign ISO 20022 readiness evidence into tamper-evident audit packs.",
   "repository": {
     "url": "https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp",
     "source": "github"
   },
-  "version": "0.0.1",
+  "version": "0.0.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "iso20022-evidence-pack-mcp",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "transport": {
         "type": "stdio"
       }

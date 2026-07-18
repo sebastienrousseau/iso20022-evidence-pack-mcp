@@ -14,8 +14,10 @@ JSON-serialisable data on every path — never a traceback.
 - [Quick start](quickstart.md) — install, configure the server in an MCP
   client, and build your first sealed evidence pack.
 - [Evidence packs](evidence-packs.md) — the pack schema, the deterministic
-  SHA-256 sealing model, tamper-evidence, the seal-vs-signature caveat, and the
-  readiness → evidence pipeline.
+  SHA-256 sealing model, tamper-evidence, the seal-vs-signature distinction,
+  Ed25519 signing, and the readiness → evidence pipeline.
+- [HTTP transport](transport.md) — the optional streamable-HTTP transport and
+  its OAuth 2.1 (RFC 9728) authentication.
 
 ## The tools
 
@@ -25,6 +27,8 @@ JSON-serialisable data on every path — never a traceback.
 | `seal_pack` | Compute the deterministic SHA-256 seal for a pack. |
 | `verify_seal` | Recompute a pack's seal and compare it to an expected digest. |
 | `render_markdown` | Render a pack as a markdown compliance report. |
+| `sign_pack` | Sign a pack's canonical bytes with the operator's Ed25519 key; returns the detached signature, public key, and `key_id`. |
+| `verify_pack_signature` | Verify a detached Ed25519 signature over a pack's canonical bytes against a supplied public key. |
 
 ## Part of the ISO 20022 MCP Suite
 

@@ -13,10 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compile ISO 20022 readiness evidence into sealed, exportable audit packs."""
+"""Optional streamable-HTTP transport with OAuth 2.1 resource-server auth."""
 
 from __future__ import annotations
-
-__version__ = "0.0.2"
-
-__all__ = ["__version__"]

@@ -177,3 +177,43 @@ class RenderResponse(BaseModel):
 
     markdown: str = ""
     error: ErrorDetail | None = None
+
+
+class SignRequest(BaseModel):
+    """Input for :func:`sign_pack`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pack_content: str = Field(description="An evidence pack as raw JSON text.")
+
+
+class SignResponse(BaseModel):
+    """A detached Ed25519 signature over a pack's canonical content."""
+
+    model_config = ConfigDict(frozen=True)
+
+    signature: str = ""
+    algorithm: str = ""
+    public_key: str = ""
+    key_id: str = ""
+    error: ErrorDetail | None = None
+
+
+class VerifySignatureRequest(BaseModel):
+    """Input for :func:`verify_pack_signature`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pack_content: str = Field(description="An evidence pack as raw JSON text.")
+    signature: str = Field(description="The base64 Ed25519 signature.")
+    public_key: str = Field(description="The signer's PEM public key.")
+
+
+class VerifySignatureResponse(BaseModel):
+    """The result of checking a detached pack signature."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verified: bool = False
+    key_id: str = ""
+    error: ErrorDetail | None = None

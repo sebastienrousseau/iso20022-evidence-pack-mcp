@@ -36,11 +36,17 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from iso20022_evidence_pack_mcp import __version__, builder, report
+from iso20022_evidence_pack_mcp import (
+    __version__,
+    builder,
+    report,
+    signing,
+)
 from iso20022_evidence_pack_mcp.errors import (
     ErrorDetail,
     EvidencePackError,
     InvalidInputError,
+    NoSigningKeyError,
 )
 from iso20022_evidence_pack_mcp.models import (
     BuildRequest,
@@ -49,8 +55,12 @@ from iso20022_evidence_pack_mcp.models import (
     RenderResponse,
     SealRequest,
     SealResponse,
+    SignRequest,
+    SignResponse,
     VerifyRequest,
     VerifyResponse,
+    VerifySignatureRequest,
+    VerifySignatureResponse,
 )
 
 server = FastMCP("iso20022-evidence-pack")
@@ -211,19 +221,115 @@ def render_markdown(
     return response.model_dump(mode="json")
 
 
+@server.tool(title="Sign an evidence pack", annotations=_LOCAL)
+def sign_pack(
+    pack_content: Annotated[
+        str, Field(description="An evidence pack as raw JSON text.")
+    ],
+) -> dict[str, Any]:
+    """Sign a pack's canonical content with the server's Ed25519 key.
+
+    The private key is configured by the operator via the environment (see
+    :mod:`iso20022_evidence_pack_mcp.signing`); it never crosses the tool
+    boundary. Returns the detached signature, the public key, and a key id;
+    fails with ``EP_NO_SIGNING_KEY`` when no key is configured.
+
+    Args:
+        pack_content: The evidence pack to sign, as JSON text.
+    """
+    request = SignRequest(pack_content=pack_content)
+    try:
+        pack = builder.parse_pack(request.pack_content)
+        private_key = signing.load_signing_key()
+        if private_key is None:
+            raise NoSigningKeyError(
+                "No Ed25519 signing key is configured; set "
+                f"{signing.SIGNING_KEY_ENV} or {signing.SIGNING_KEY_FILE_ENV}."
+            )
+        message = builder.canonical_bytes(pack)
+        response = SignResponse(
+            signature=signing.sign(private_key, message),
+            algorithm=signing.ALGORITHM,
+            public_key=signing.public_key_pem(private_key),
+            key_id=signing.key_id(private_key.public_key()),
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = SignResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
+@server.tool(title="Verify an evidence-pack signature", annotations=_LOCAL)
+def verify_pack_signature(
+    pack_content: Annotated[
+        str, Field(description="An evidence pack as raw JSON text.")
+    ],
+    signature: Annotated[
+        str, Field(description="The base64 Ed25519 signature to check.")
+    ],
+    public_key: Annotated[
+        str, Field(description="The signer's PEM public key.")
+    ],
+) -> dict[str, Any]:
+    """Verify a detached Ed25519 signature over a pack's canonical content.
+
+    Args:
+        pack_content: The evidence pack to check, as JSON text.
+        signature: The base64-encoded detached signature.
+        public_key: The signer's PEM public key.
+    """
+    request = VerifySignatureRequest(
+        pack_content=pack_content,
+        signature=signature,
+        public_key=public_key,
+    )
+    try:
+        pack = builder.parse_pack(request.pack_content)
+        message = builder.canonical_bytes(pack)
+        ok = signing.verify(request.public_key, message, request.signature)
+        response = VerifySignatureResponse(
+            verified=ok,
+            key_id=signing.key_id_from_pem(request.public_key),
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = VerifySignatureResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
 def main(argv: list[str] | None = None) -> None:
-    """Run the MCP server over stdio."""
+    """Run the MCP server over stdio (default) or streamable HTTP.
+
+    ``--transport=http`` serves the authenticated streamable-HTTP transport
+    (OAuth 2.1 resource server, or a static dev-mode bearer token); see
+    :mod:`iso20022_evidence_pack_mcp.http.transport`.
+    """
     parser = argparse.ArgumentParser(
         prog="iso20022-evidence-pack-mcp",
-        description="ISO 20022 evidence-pack MCP server (stdio).",
+        description="ISO 20022 evidence-pack MCP server.",
     )
     parser.add_argument(
         "--version",
         action="version",
         version=f"iso20022-evidence-pack-mcp {__version__}",
     )
-    parser.parse_args(argv)
-    server.run()
+    parser.add_argument(
+        "--transport",
+        choices=("stdio", "http"),
+        default="stdio",
+        help="Transport to serve (default: stdio).",
+    )
+    parser.add_argument(
+        "--bind",
+        default=None,
+        metavar="HOST:PORT",
+        help="Address for --transport=http (default: 127.0.0.1:8080).",
+    )
+    args = parser.parse_args(argv)
+    if args.transport == "http":
+        from iso20022_evidence_pack_mcp.http import transport
+
+        transport.run_http(server, args.bind or transport.DEFAULT_BIND)
+    else:
+        server.run()
 
 
 if __name__ == "__main__":  # pragma: no cover

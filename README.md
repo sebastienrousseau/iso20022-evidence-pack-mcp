@@ -23,7 +23,8 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 > field breaks verification — so an auditor can detect undetected change. There
 > is **no network surface, no sub-servers, and no XML**: every tool is a pure,
 > local, deterministic transform over the JSON structures it is handed.
-> **v0.0.1**, stdio transport, 4 tools, Python 3.10+.
+> **v0.0.2**, stdio transport (plus an optional authenticated HTTP transport),
+> 6 tools including Ed25519 pack signing, Python 3.10+.
 
 ## Contents
 
@@ -32,6 +33,8 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 - [Install](#install)
 - [Quick Start](#quick-start)
 - [Tools](#tools)
+- [HTTP transport & authentication](#http-transport--authentication)
+- [Signing evidence packs](#signing-evidence-packs)
 - [Examples](#examples)
 - [How it fits the suite](#how-it-fits-the-suite)
 - [Open-core vs premium](#open-core-vs-premium)
@@ -216,6 +219,80 @@ JSON-serialisable data; on a validation or shape error they return an
 - `seal_pack` — Compute the deterministic SHA-256 seal for an evidence pack (raw JSON).
 - `verify_seal` — Recompute a pack's seal and compare it to an expected digest.
 - `render_markdown` — Render an evidence pack as a markdown compliance report.
+- `sign_pack` — Sign a pack's canonical bytes with the operator's Ed25519 key (configured via the environment); returns the base64 detached signature, the PEM public key, and a `key_id`. Fails with `EP_NO_SIGNING_KEY` when no key is configured. See [Signing evidence packs](#signing-evidence-packs).
+- `verify_pack_signature` — Verify a detached Ed25519 signature over a pack's canonical bytes against a public key passed as an argument; returns `verified` and `key_id`.
+
+## HTTP transport & authentication
+
+The server speaks **stdio by default** — launched by a local MCP client, one
+process per operator, with no network surface and no authentication. For shared,
+multi-tenant deployments, v0.0.2 adds an **optional streamable-HTTP transport**:
+
+```sh
+iso20022-evidence-pack-mcp --transport=http --bind=127.0.0.1:8080
+```
+
+`--bind` defaults to loopback `127.0.0.1:8080`, so exposing the server (e.g.
+`--bind=0.0.0.0:8080`) is an explicit opt-in. **Starting the HTTP transport with
+no auth configured is refused** rather than serving an unauthenticated endpoint.
+Two auth modes apply, strongest first:
+
+- **OAuth 2.1 resource server (RFC 9728)** — set the `ISO20022_EVIDENCE_PACK_OAUTH_*`
+  variables:
+
+  | Variable | Required | Meaning |
+  |---|---|---|
+  | `ISO20022_EVIDENCE_PACK_OAUTH_ISSUER` | yes | Authorization-server issuer; the JWT `iss` must match it exactly. |
+  | `ISO20022_EVIDENCE_PACK_OAUTH_AUDIENCE` | yes | This server's canonical resource URI (RFC 8707); the JWT `aud` must contain it. |
+  | `ISO20022_EVIDENCE_PACK_OAUTH_JWKS_URL` | no | JWKS document URL (defaults to `<issuer>/.well-known/jwks.json`). |
+  | `ISO20022_EVIDENCE_PACK_OAUTH_SCOPES` | no | Space-separated scopes every token must carry. |
+
+  Every request must present `Authorization: Bearer <jwt>`; the JWT is validated
+  against the JWKS (`iss` / `aud` / `exp` / `nbf` and any required scopes).
+  Protected-resource metadata is served at
+  `/.well-known/oauth-protected-resource`; failures are rejected `401` (or `403`
+  for insufficient scope) with a `WWW-Authenticate` challenge.
+- **Static dev-mode bearer token** — set `ISO20022_EVIDENCE_PACK_TOKEN` to a
+  non-empty secret. Every request must then send `Authorization: Bearer <secret>`.
+  This is a single shared secret with no expiry and no scopes; use OAuth 2.1 in
+  production.
+
+HTTP callers may also send an optional `X-MCP-Tenant` header, forwarded into a
+tool-visible request context for multi-tenant scoping. The HTTP transport pulls
+in extra dependencies (`pyjwt[crypto]`, `httpx`, `starlette`, `uvicorn`); the
+default stdio transport needs none of them. See
+[`docs/transport.md`](docs/transport.md) for the full reference.
+
+## Signing evidence packs
+
+A pack's **seal** proves *integrity* — the content has not changed. A
+**signature** proves *authenticity* — a specific key attests to that content.
+v0.0.2 adds Ed25519 signing via two tools:
+
+- `sign_pack` signs the pack's **canonical bytes** — the exact same
+  serialization the seal digests, with the `digest` field excluded. Because the
+  signature covers the sealed content, it **stays valid if only the `digest`
+  field changes** but **breaks if any sealed field changes**. It returns the
+  base64 detached signature, `algorithm` `"ed25519"`, the PEM public key, and a
+  `key_id` (`ed25519:<16 hex>`).
+- `verify_pack_signature` verifies a detached signature over a pack's canonical
+  bytes against a **public** key passed as a tool argument. Public keys are safe
+  to pass across the tool boundary; it returns `verified` and `key_id`.
+
+The Ed25519 **private key is configured by the operator at launch**, via the
+environment:
+
+- `ISO20022_EVIDENCE_PACK_SIGNING_KEY` — the PEM private key inline, or
+- `ISO20022_EVIDENCE_PACK_SIGNING_KEY_FILE` — a path to a PEM key file.
+
+**The private key never crosses the MCP tool boundary.** The server never
+generates or persists private keys — key material is generated and custodied by
+the operator, ideally in an HSM/KMS. With no key configured, `sign_pack` returns
+`EP_NO_SIGNING_KEY`; a malformed key or signature returns `EP_INVALID_INPUT`.
+
+Signing with an operator-supplied key is available today. **Keyless (sigstore)
+and PKI signing with a verification trust root remain [roadmap](ROADMAP.md)
+items.**
 
 ## Examples
 
@@ -263,7 +340,9 @@ commercial add-ons on the [roadmap](ROADMAP.md).
 | Pack assembly + grading (`build_evidence_pack`) | **Open Source** |
 | Deterministic SHA-256 sealing + verification (`seal_pack`, `verify_seal`) | **Open Source** |
 | Markdown compliance reports (`render_markdown`) | **Open Source** |
-| Cryptographic signing (keys / PKI, authenticity) | **Paid / Roadmap** |
+| Ed25519 signing with an operator key (`sign_pack`, `verify_pack_signature`, authenticity) | **Open Source** |
+| Authenticated HTTP transport (OAuth 2.1 / RFC 9728, multi-tenant) | **Open Source** |
+| Keyless (sigstore) / PKI signing + verification trust root | **Paid / Roadmap** |
 | Long-term evidence storage + export formats (PDF/A, WORM archives) | **Paid / Roadmap** |
 | White-label reports + premium entitlement gating | **Paid / Roadmap** |
 
@@ -278,12 +357,18 @@ that a pack has not changed since it was sealed (tamper-evidence); it does
 pack can also compute a valid seal for it, so a seal is a checksum, not a
 proof of origin.
 
-Establishing authenticity — binding a pack to an operator identity via keys /
-PKI — is explicitly a **roadmap** item (see [`ROADMAP.md`](ROADMAP.md)) and,
-until it ships, the operator's responsibility. Treat a sealed pack as
-integrity-checked, transmit and store it over channels you already trust, and
-do not represent it as a signed one. See [`SECURITY.md`](SECURITY.md) for the
-full threat-model note.
+**Authenticity** — binding a pack to a specific key — is what
+[`sign_pack` / `verify_pack_signature`](#signing-evidence-packs) add on top of
+the seal: an Ed25519 signature over the pack's canonical bytes attests that the
+holder of the operator's key produced that content. The seal and the signature
+are complementary: the seal is integrity, the signature is authenticity. Note
+that a signature is only as trustworthy as your provenance for the public key —
+**keyless (sigstore) / PKI signing with a verification trust root remains a
+roadmap item** (see [`ROADMAP.md`](ROADMAP.md)). If you have configured no
+signing key, treat a sealed-but-unsigned pack as integrity-checked only:
+transmit and store it over channels you already trust, and do not represent it
+as a signed one. See [`SECURITY.md`](SECURITY.md) for the full threat-model
+note.
 
 ## When not to use iso20022-evidence-pack-mcp
 
@@ -293,13 +378,19 @@ full threat-model note.
   results; it does not produce them. Run
   [`iso20022-readiness-suite-mcp`](https://github.com/sebastienrousseau/iso20022-readiness-suite-mcp)
   to score, remediate, and simulate first, then fold its output in here.
-- **You need a cryptographic signature / proof of origin.** The seal is a
-  tamper-evidence digest, not a signature (see
-  [Seal vs signature](#seal-vs-signature)). Signing is on the roadmap.
-- **You need a long-lived network service.** v0.0.1 speaks **stdio only** —
-  one process per operator, launched by the client, no network surface. An
-  HTTP/OAuth transport for shared, multi-tenant deployments is on the
-  [roadmap](ROADMAP.md), not in this release.
+- **You need keyless / PKI signatures against a public trust root.** The seal
+  is a tamper-evidence digest, not a signature (see
+  [Seal vs signature](#seal-vs-signature)). Ed25519 signing with an
+  operator-supplied key ships in v0.0.2
+  ([Signing evidence packs](#signing-evidence-packs)), but keyless (sigstore) /
+  PKI signing with a verification trust root remains on the
+  [roadmap](ROADMAP.md).
+- **You want a zero-dependency network service.** The default transport is
+  **stdio** — one process per operator, launched by the client, no network
+  surface. An optional authenticated HTTP transport (OAuth 2.1 / RFC 9728) ships
+  in v0.0.2 ([HTTP transport & authentication](#http-transport--authentication))
+  for shared, multi-tenant deployments, but it pulls in extra dependencies and
+  must be explicitly enabled.
 - **You need streaming responses.** Tool calls return whole values, not
   streams.
 
@@ -330,11 +421,16 @@ make examples     # run every examples/*.py end to end
 
 `iso20022-evidence-pack-mcp` returns errors as data — every tool catches the
 documented validation and value errors and returns an `{"error": ...}`
-envelope; it never propagates raw exceptions to the MCP client. The server has
-no network surface, spawns no sub-processes, and parses no XML — its whole
-attacker-reachable surface is JSON parsed with the standard library and
-validated against pydantic models. **The pack seal is a tamper-evidence digest,
-not a signature** (see [Seal vs signature](#seal-vs-signature)). Reporting
+envelope; it never propagates raw exceptions to the MCP client. Over the default
+stdio transport the server has no network surface, spawns no sub-processes, and
+parses no XML — its whole attacker-reachable surface is JSON parsed with the
+standard library and validated against pydantic models. The optional HTTP
+transport is off by default and, when enabled, refuses to start without OAuth 2.1
+(RFC 9728) or a static dev-mode bearer token (see
+[HTTP transport & authentication](#http-transport--authentication)). **The pack
+seal is a tamper-evidence digest, not a signature**; Ed25519 signing
+(`sign_pack`) adds authenticity on top (see
+[Seal vs signature](#seal-vs-signature)). Reporting
 practice, supported versions, the seal threat-model note, and the full
 supply-chain posture (SLSA L3 provenance, PEP 740 attestations, SBOMs, and the
 NIST SP 800-218 SSDF practice mapping) are documented in
@@ -347,10 +443,11 @@ Vulnerability Reporting, not public issues.
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes
 - [`SECURITY.md`](SECURITY.md) — disclosure + supported versions + seal threat model
 - [`SUPPORT.md`](SUPPORT.md) — how to get help
-- [`ROADMAP.md`](ROADMAP.md) — what's next (cryptographic signing, long-term storage, HTTP transport, premium entitlement)
+- [`ROADMAP.md`](ROADMAP.md) — what's next (keyless/PKI signing, long-term storage, premium entitlement)
 - [`MAINTAINERS.md`](MAINTAINERS.md) — who can merge
 - [`docs/quickstart.md`](docs/quickstart.md) — 10-minute install → first conversation
-- [`docs/evidence-packs.md`](docs/evidence-packs.md) — the pack schema, the SHA-256 sealing model, and the readiness → evidence pipeline
+- [`docs/evidence-packs.md`](docs/evidence-packs.md) — the pack schema, the SHA-256 sealing model, Ed25519 signing, and the readiness → evidence pipeline
+- [`docs/transport.md`](docs/transport.md) — the optional HTTP transport and OAuth 2.1 (RFC 9728) authentication
 - [`glama.json`](glama.json) — Glama directory manifest
 
 ---

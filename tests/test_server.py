@@ -20,8 +20,12 @@ from __future__ import annotations
 import json
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+)
 
-from iso20022_evidence_pack_mcp import __version__
+from iso20022_evidence_pack_mcp import __version__, signing
 from iso20022_evidence_pack_mcp import server as server_mod
 from iso20022_evidence_pack_mcp.errors import InvalidInputError
 from tests.conftest import (
@@ -31,6 +35,19 @@ from tests.conftest import (
     REMEDIATION_FULL,
     SIMULATION_FULL,
 )
+
+
+def _configure_signing_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure a fresh Ed25519 signing key via the environment."""
+    key = Ed25519PrivateKey.generate()
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode("utf-8")
+    monkeypatch.setenv(signing.SIGNING_KEY_ENV, pem)
+    monkeypatch.delenv(signing.SIGNING_KEY_FILE_ENV, raising=False)
+
 
 # --------------------------------------------------------------------------
 # Internal helpers
@@ -221,6 +238,139 @@ def test_render_schema_invalid_pack_returns_error() -> None:
 
 
 # --------------------------------------------------------------------------
+# sign_pack
+# --------------------------------------------------------------------------
+
+
+def test_sign_pack_no_key_configured(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """Signing without a configured key returns ``EP_NO_SIGNING_KEY``."""
+    monkeypatch.delenv(signing.SIGNING_KEY_ENV, raising=False)
+    monkeypatch.delenv(signing.SIGNING_KEY_FILE_ENV, raising=False)
+    result = server_mod.sign_pack(pack_content=full_pack_json)
+    assert result["signature"] == ""
+    assert result["error"]["code"] == "EP_NO_SIGNING_KEY"
+
+
+def test_sign_pack_with_key(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """Signing with a configured key returns the signature and public key."""
+    _configure_signing_key(monkeypatch)
+    result = server_mod.sign_pack(pack_content=full_pack_json)
+    assert result["error"] is None
+    assert result["algorithm"] == "ed25519"
+    assert result["signature"]
+    assert "BEGIN PUBLIC KEY" in result["public_key"]
+    assert result["key_id"].startswith("ed25519:")
+
+
+def test_sign_pack_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Signing unparseable pack JSON returns ``EP_INVALID_INPUT``."""
+    _configure_signing_key(monkeypatch)
+    result = server_mod.sign_pack(pack_content="{bad")
+    assert result["error"]["code"] == "EP_INVALID_INPUT"
+
+
+# --------------------------------------------------------------------------
+# verify_pack_signature
+# --------------------------------------------------------------------------
+
+
+def test_verify_pack_signature_round_trip(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """A pack signed and then verified reports ``verified`` true."""
+    _configure_signing_key(monkeypatch)
+    signed = server_mod.sign_pack(pack_content=full_pack_json)
+    result = server_mod.verify_pack_signature(
+        pack_content=full_pack_json,
+        signature=signed["signature"],
+        public_key=signed["public_key"],
+    )
+    assert result["error"] is None
+    assert result["verified"] is True
+    assert result["key_id"] == signed["key_id"]
+
+
+def test_verify_pack_signature_digest_change_stays_valid(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """Only the ``digest`` field changing leaves the signature valid.
+
+    Signing operates on the canonical bytes (digest excluded), so mutating
+    just the seal must not break the detached signature.
+    """
+    _configure_signing_key(monkeypatch)
+    signed = server_mod.sign_pack(pack_content=full_pack_json)
+    pack = json.loads(full_pack_json)
+    pack["digest"] = "sha256:0000"
+    result = server_mod.verify_pack_signature(
+        pack_content=json.dumps(pack),
+        signature=signed["signature"],
+        public_key=signed["public_key"],
+    )
+    assert result["verified"] is True
+
+
+def test_verify_pack_signature_tamper_breaks(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """Mutating a sealed field breaks signature verification."""
+    _configure_signing_key(monkeypatch)
+    signed = server_mod.sign_pack(pack_content=full_pack_json)
+    pack = json.loads(full_pack_json)
+    pack["grade"] = "A" if pack["grade"] != "A" else "F"
+    result = server_mod.verify_pack_signature(
+        pack_content=json.dumps(pack),
+        signature=signed["signature"],
+        public_key=signed["public_key"],
+    )
+    assert result["verified"] is False
+
+
+def test_verify_pack_signature_malformed_public_key(
+    full_pack_json: str,
+) -> None:
+    """A malformed public key returns ``EP_INVALID_INPUT``."""
+    result = server_mod.verify_pack_signature(
+        pack_content=full_pack_json,
+        signature="AAAA",
+        public_key="not-a-pem",
+    )
+    assert result["error"]["code"] == "EP_INVALID_INPUT"
+
+
+def test_verify_pack_signature_malformed_signature(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """A non-base64 signature returns ``EP_INVALID_INPUT``."""
+    _configure_signing_key(monkeypatch)
+    signed = server_mod.sign_pack(pack_content=full_pack_json)
+    result = server_mod.verify_pack_signature(
+        pack_content=full_pack_json,
+        signature="!!!not-b64!!!",
+        public_key=signed["public_key"],
+    )
+    assert result["error"]["code"] == "EP_INVALID_INPUT"
+
+
+def test_verify_pack_signature_invalid_pack_json(
+    monkeypatch: pytest.MonkeyPatch, full_pack_json: str
+) -> None:
+    """Unparseable pack JSON returns ``EP_INVALID_INPUT``."""
+    _configure_signing_key(monkeypatch)
+    signed = server_mod.sign_pack(pack_content=full_pack_json)
+    result = server_mod.verify_pack_signature(
+        pack_content="{bad",
+        signature=signed["signature"],
+        public_key=signed["public_key"],
+    )
+    assert result["error"]["code"] == "EP_INVALID_INPUT"
+
+
+# --------------------------------------------------------------------------
 # main entry point
 # --------------------------------------------------------------------------
 
@@ -239,3 +389,33 @@ def test_main_runs_server(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server_mod.server, "run", lambda: called.append(True))
     server_mod.main([])
     assert called == [True]
+
+
+def test_main_http_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--transport=http`` hands off to the HTTP transport runner."""
+    from iso20022_evidence_pack_mcp.http import transport as transport_mod
+
+    calls: list[tuple[object, str]] = []
+    monkeypatch.setattr(
+        transport_mod,
+        "run_http",
+        lambda srv, bind: calls.append((srv, bind)),
+    )
+    server_mod.main(["--transport=http", "--bind=0.0.0.0:9000"])
+    assert calls == [(server_mod.server, "0.0.0.0:9000")]
+
+
+def test_main_http_transport_default_bind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--transport=http`` with no ``--bind`` uses the default bind."""
+    from iso20022_evidence_pack_mcp.http import transport as transport_mod
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        transport_mod,
+        "run_http",
+        lambda srv, bind: calls.append(bind),
+    )
+    server_mod.main(["--transport=http"])
+    assert calls == [transport_mod.DEFAULT_BIND]

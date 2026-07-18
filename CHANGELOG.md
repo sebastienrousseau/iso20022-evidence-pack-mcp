@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.2] - 2026-07-18
+
+Adds **cryptographic signing** of evidence packs and an **optional
+authenticated HTTP transport** — turning a tamper-evident pack into an
+*authenticatable* one, and letting the server run as a shared, multi-tenant
+service alongside the default stdio transport.
+
+### Added
+
+- **Ed25519 pack signing — 2 new MCP tools** (6 tools total), separating
+  *authenticity* from the seal's *integrity*:
+  - `sign_pack` — sign a pack's **canonical bytes** (the exact serialization
+    the seal digests) with the operator's Ed25519 private key. Returns the
+    base64 detached signature, `algorithm` `"ed25519"`, the PEM public key, and
+    a `key_id` (`ed25519:<16 hex>`). Because the signature covers the sealed
+    content (the `digest` field excluded), a signature stays valid when only
+    the `digest` changes but breaks if any sealed field changes.
+  - `verify_pack_signature` — verify a detached signature over a pack's
+    canonical bytes against a **public** key passed as a tool argument
+    (public keys are safe to pass); returns `verified` and `key_id`. A
+    malformed key or signature returns `EP_INVALID_INPUT`.
+- **Operator-custodied signing key**: the Ed25519 private key is configured by
+  the operator at launch via `ISO20022_EVIDENCE_PACK_SIGNING_KEY` (inline PEM)
+  or `ISO20022_EVIDENCE_PACK_SIGNING_KEY_FILE` (a PEM path). The private key
+  **never crosses the MCP tool boundary**; the server never generates or
+  persists private keys (ideally custody them in an HSM/KMS). With no key
+  configured, `sign_pack` returns `EP_NO_SIGNING_KEY`.
+- **Seal vs signature, now both shipped**: the seal digest proves **integrity**
+  (the content has not changed); the signature proves **authenticity** (a
+  specific key attests to that content). Keyless/PKI signing and a verification
+  trust root remain roadmap items.
+- **Optional streamable-HTTP transport**:
+  `iso20022-evidence-pack-mcp --transport=http --bind=HOST:PORT` serves the MCP
+  server over authenticated streamable HTTP alongside the default stdio
+  transport (`--bind` defaults to loopback `127.0.0.1:8080`). An optional
+  `X-MCP-Tenant` request header is forwarded into a tool-visible context
+  variable for multi-tenant scoping.
+- **OAuth 2.1 resource-server auth (RFC 9728)** on the HTTP transport, enabled
+  by the `ISO20022_EVIDENCE_PACK_OAUTH_*` variables — `_ISSUER` (required),
+  `_AUDIENCE` (required), `_JWKS_URL` (optional; defaults to
+  `<issuer>/.well-known/jwks.json`), and `_SCOPES` (optional). Bearer JWTs are
+  validated against the JWKS (`iss`/`aud`/`exp`/`nbf` and any required scopes);
+  the verification algorithm is taken from the JWKS key, not the token header.
+  Protected-resource metadata is served at
+  `/.well-known/oauth-protected-resource`; failures are rejected `401` / `403`
+  with a `WWW-Authenticate` challenge. A static dev-mode bearer token
+  (`ISO20022_EVIDENCE_PACK_TOKEN`) remains available as an explicit fallback.
+  Starting the HTTP transport with **no** auth configured is refused rather
+  than serving an unauthenticated endpoint.
+- **New optional dependencies** for the HTTP transport and signing:
+  `pyjwt[crypto]`, `httpx`, `starlette`, `uvicorn`, and `cryptography`. The
+  default stdio transport is unaffected.
+
+[0.0.2]: https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp/releases/tag/v0.0.2
+
 ## [0.0.1] - 2026-07-18
 
 Initial release: the fully local, closed-world Model Context Protocol (MCP)

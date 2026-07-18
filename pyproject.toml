@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "iso20022-evidence-pack-mcp"
-version = "0.0.1"
+version = "0.0.2"
 description = "MCP server that compiles ISO 20022 readiness findings, remediation diffs, and simulated responses into sealed audit evidence packs."
 authors = ["Sebastien Rousseau <sebastian.rousseau@gmail.com>"]
 license = "Apache-2.0"
@@ -19,6 +19,15 @@ iso20022-evidence-pack-mcp = "iso20022_evidence_pack_mcp.server:main"
 python = ">=3.10,<4.0"
 mcp = ">=1.28.1"
 pydantic = ">=2.9,<3"
+# Ed25519 signing/verification of evidence packs (evidence_pack_mcp.signing).
+cryptography = ">=43,<47"
+# Optional streamable-HTTP transport (iso20022_evidence_pack_mcp.http):
+# OAuth 2.1 resource-server JWT validation needs PyJWT; [crypto] guarantees
+# RSA/EC JWKS support. httpx fetches the JWKS; starlette/uvicorn serve ASGI.
+pyjwt = { version = ">=2.10,<3", extras = ["crypto"] }
+httpx = ">=0.27,<1"
+starlette = ">=0.40,<1"
+uvicorn = ">=0.30,<1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0.3,<10.0.0"
