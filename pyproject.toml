@@ -20,7 +20,7 @@ python = ">=3.10,<4.0"
 mcp = ">=1.28.1"
 pydantic = ">=2.9,<3"
 # Ed25519 signing/verification of evidence packs (evidence_pack_mcp.signing).
-cryptography = ">=43,<47"
+cryptography = ">=48.0.1,<49"
 # Optional streamable-HTTP transport (iso20022_evidence_pack_mcp.http):
 # OAuth 2.1 resource-server JWT validation needs PyJWT; [crypto] guarantees
 # RSA/EC JWKS support. httpx fetches the JWKS; starlette/uvicorn serve ASGI.
