@@ -17,7 +17,7 @@ iso20022-evidence-pack-mcp = "iso20022_evidence_pack_mcp.server:main"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
-mcp = ">=1.28.1"
+mcp = ">=1.28.1,<2"
 pydantic = ">=2.9,<3"
 # Ed25519 signing/verification of evidence packs (evidence_pack_mcp.signing).
 cryptography = ">=48.0.1,<50"
