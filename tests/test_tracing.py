@@ -125,9 +125,15 @@ def test_trace_span_records_exception(
     exporter: InMemorySpanExporter,
 ) -> None:
     """A raised exception is recorded on the span, then re-raised unchanged."""
-    with pytest.raises(ValueError, match="boom"):
+    # try/except (not pytest.raises) so the post-block assertions are plainly
+    # reachable to static analysis while still proving the exception re-raises.
+    raised: ValueError | None = None
+    try:
         with tracing.trace_span("do-work"):
             raise ValueError("boom")
+    except ValueError as exc:
+        raised = exc
+    assert raised is not None and str(raised) == "boom"
     spans = exporter.get_finished_spans()
     assert spans[0].status.status_code == StatusCode.ERROR
     assert any(e.name == "exception" for e in spans[0].events)

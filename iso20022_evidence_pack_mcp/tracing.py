@@ -156,8 +156,11 @@ def traced_tool(name: str) -> Callable[[F], F]:
     """
 
     def decorator(func: F) -> F:
+        """Wrap ``func`` so each call runs inside a ``trace_span``."""
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Run ``func`` within a span named for the tool."""
             with trace_span(name):
                 return func(*args, **kwargs)
 
