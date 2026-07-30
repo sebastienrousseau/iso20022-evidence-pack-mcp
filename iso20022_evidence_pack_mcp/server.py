@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from typing import Annotated, Any, cast
 
 from mcp.server.fastmcp import FastMCP
@@ -46,6 +47,7 @@ from iso20022_evidence_pack_mcp import (
     cloud,
     report,
     signing,
+    tracing,
 )
 from iso20022_evidence_pack_mcp.errors import (
     ErrorDetail,
@@ -126,6 +128,7 @@ def _loads(content: str, locator: str) -> Any:
 
 
 @server.tool(title="Build an evidence pack", annotations=_LOCAL)
+@tracing.traced_tool("build_evidence_pack")
 def build_evidence_pack(
     readiness_content: Annotated[
         str, Field(description="A readiness result as raw JSON text.")
@@ -183,6 +186,7 @@ def build_evidence_pack(
 
 
 @server.tool(title="Seal an evidence pack", annotations=_LOCAL)
+@tracing.traced_tool("seal_pack")
 def seal_pack(
     pack_content: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -203,6 +207,7 @@ def seal_pack(
 
 
 @server.tool(title="Verify an evidence-pack seal", annotations=_LOCAL)
+@tracing.traced_tool("verify_seal")
 def verify_seal(
     pack_content: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -233,6 +238,7 @@ def verify_seal(
 
 
 @server.tool(title="Render an evidence pack", annotations=_LOCAL)
+@tracing.traced_tool("render_markdown")
 def render_markdown(
     pack_content: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -253,6 +259,7 @@ def render_markdown(
 
 
 @server.tool(title="Sign an evidence pack", annotations=_LOCAL)
+@tracing.traced_tool("sign_pack")
 def sign_pack(
     pack_content: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -290,6 +297,7 @@ def sign_pack(
 
 
 @server.tool(title="Verify an evidence-pack signature", annotations=_LOCAL)
+@tracing.traced_tool("verify_pack_signature")
 def verify_pack_signature(
     pack_content: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -334,6 +342,7 @@ def verify_pack_signature(
 
 
 @server.tool(title="Sign a pack with AWS KMS", annotations=_EXTERNAL)
+@tracing.traced_tool("sign_pack_aws_kms")
 def sign_pack_aws_kms(
     evidence_pack_json: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -372,6 +381,7 @@ def sign_pack_aws_kms(
 
 
 @server.tool(title="Sign a pack with Vault Transit", annotations=_EXTERNAL)
+@tracing.traced_tool("sign_pack_vault")
 def sign_pack_vault(
     evidence_pack_json: Annotated[
         str, Field(description="An evidence pack as raw JSON text.")
@@ -411,6 +421,7 @@ def sign_pack_vault(
 
 
 @server.tool(title="Export a pack to Amazon S3", annotations=_EXTERNAL)
+@tracing.traced_tool("export_pack_to_s3")
 def export_pack_to_s3(
     signed_pack_json: Annotated[
         str, Field(description="A signed evidence pack as raw JSON text.")
@@ -445,6 +456,7 @@ def export_pack_to_s3(
 
 
 @server.tool(title="Verify SLSA provenance", annotations=_EXTERNAL_RO)
+@tracing.traced_tool("verify_slsa_provenance")
 def verify_slsa_provenance(
     artifact_path: Annotated[
         str, Field(description="Path to the artifact to verify.")
@@ -475,6 +487,7 @@ def verify_slsa_provenance(
 
 
 @server.tool(title="Verify a cosign signature", annotations=_EXTERNAL_RO)
+@tracing.traced_tool("verify_cosign_signature")
 def verify_cosign_signature(
     image_ref: Annotated[
         str, Field(description="The container image reference to verify.")
@@ -643,6 +656,11 @@ def main(argv: list[str] | None = None) -> None:
     ``--transport=http`` serves the authenticated streamable-HTTP transport
     (OAuth 2.1 resource server, or a static dev-mode bearer token); see
     :mod:`iso20022_evidence_pack_mcp.http.transport`.
+
+    ``--otel-endpoint`` (or ``OTEL_EXPORTER_OTLP_ENDPOINT``) opts into
+    OpenTelemetry tracing of tool calls; it requires the ``[otel]`` extra and
+    is a graceful no-op when that extra is absent (see
+    :mod:`iso20022_evidence_pack_mcp.tracing`).
     """
     parser = argparse.ArgumentParser(
         prog="iso20022-evidence-pack-mcp",
@@ -665,7 +683,19 @@ def main(argv: list[str] | None = None) -> None:
         metavar="HOST:PORT",
         help="Address for --transport=http (default: 127.0.0.1:8080).",
     )
+    parser.add_argument(
+        "--otel-endpoint",
+        default=None,
+        metavar="URL",
+        help=(
+            "Enable OpenTelemetry tracing and export spans to this OTLP/HTTP "
+            "endpoint (requires the [otel] extra; a no-op if absent). Also "
+            "honours the OTEL_EXPORTER_OTLP_ENDPOINT environment variable."
+        ),
+    )
     args = parser.parse_args(argv)
+    if args.otel_endpoint or os.environ.get(tracing.OTEL_ENDPOINT_ENV):
+        tracing.init_tracing(endpoint=args.otel_endpoint)
     if args.transport == "http":
         from iso20022_evidence_pack_mcp.http import transport
 

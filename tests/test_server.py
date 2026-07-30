@@ -391,6 +391,21 @@ def test_main_runs_server(monkeypatch: pytest.MonkeyPatch) -> None:
     assert called == [True]
 
 
+def test_main_otel_endpoint_inits_tracing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--otel-endpoint`` initialises tracing before running the server."""
+    inits: list[str | None] = []
+    monkeypatch.setattr(
+        server_mod.tracing,
+        "init_tracing",
+        lambda endpoint=None: inits.append(endpoint) or True,
+    )
+    monkeypatch.setattr(server_mod.server, "run", lambda: None)
+    server_mod.main(["--otel-endpoint=http://localhost:4318/v1/traces"])
+    assert inits == ["http://localhost:4318/v1/traces"]
+
+
 def test_main_http_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     """``--transport=http`` hands off to the HTTP transport runner."""
     from iso20022_evidence_pack_mcp.http import transport as transport_mod
