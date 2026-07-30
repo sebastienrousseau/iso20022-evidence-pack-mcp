@@ -86,3 +86,25 @@ class NoSigningKeyError(EvidencePackError):
     """No Ed25519 signing key is configured for this server."""
 
     code = "EP_NO_SIGNING_KEY"
+
+
+class MissingExtraError(EvidencePackError):
+    """An opt-in cloud tool needs an optional dependency that is not installed.
+
+    The base server ships with no network surface; cloud/KMS tools live behind
+    optional extras (``[aws]``, ``[vault]``). This error is raised when the
+    lazy import of such a dependency fails, and always carries the exact
+    ``pip install`` command that unlocks the tool.
+    """
+
+    code = "EP_MISSING_EXTRA"
+
+
+class ExternalToolError(EvidencePackError):
+    """A required external command-line tool is absent or failed to run.
+
+    Used by the provenance/signature verifiers that shell out to a local
+    binary (``slsa-verifier``, ``cosign``) when that binary is not on ``PATH``.
+    """
+
+    code = "EP_EXTERNAL_TOOL"

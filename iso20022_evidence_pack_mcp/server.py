@@ -17,10 +17,14 @@
 
 This server compiles a readiness result, an optional remediation result, and
 any simulated bank responses into one sealed, exportable audit artifact, and
-lets auditors re-seal, verify, and render packs. It is a fully local, closed-
-world server (no network surface, no sub-servers): every tool returns typed,
-JSON-serializable data and an ``{"error": ...}``-shaped payload on any failure,
-never a traceback.
+lets auditors re-seal, verify, and render packs. The core tool surface is
+fully local and closed-world (no network surface, no sub-servers). A small set
+of **opt-in** cloud/KMS tools (annotated ``openWorldHint``) reach external
+systems -- AWS KMS/S3, HashiCorp Vault, or a local verifier binary -- and are
+gated behind optional extras (``[aws]``, ``[vault]``) with lazy imports, so the
+base install stays network-free. Every tool returns typed, JSON-serializable
+data and an ``{"error": ...}``-shaped payload on any failure, never a
+traceback.
 
 Launch as a console script (``iso20022-evidence-pack-mcp``) or configure it in
 an MCP client. The transport is stdio (FastMCP's default).
@@ -39,6 +43,7 @@ from pydantic import Field
 from iso20022_evidence_pack_mcp import (
     __version__,
     builder,
+    cloud,
     report,
     signing,
 )
@@ -49,14 +54,19 @@ from iso20022_evidence_pack_mcp.errors import (
     NoSigningKeyError,
 )
 from iso20022_evidence_pack_mcp.models import (
+    AwsKmsSignResponse,
     BuildRequest,
     BuildResponse,
+    CosignVerifyResponse,
     RenderRequest,
     RenderResponse,
+    S3ExportResponse,
     SealRequest,
     SealResponse,
     SignRequest,
     SignResponse,
+    SlsaVerifyResponse,
+    VaultSignResponse,
     VerifyRequest,
     VerifyResponse,
     VerifySignatureRequest,
@@ -74,6 +84,25 @@ _LOCAL = ToolAnnotations(
     destructiveHint=False,
     idempotentHint=True,
     openWorldHint=False,
+)
+
+# Opt-in tools that reach an *external* system (cloud KMS/S3, Vault). They are
+# not read-only (they emit a signature or write an object) but are
+# non-destructive, and open-world -- distinct from the ``_LOCAL`` annotation
+# the closed-world tools carry. These require an optional extra to be
+# installed; see :mod:`iso20022_evidence_pack_mcp.cloud`.
+_EXTERNAL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    openWorldHint=True,
+)
+
+# Opt-in tools that reach an external system but only *read* from it (the
+# provenance/signature verifiers). Read-only, non-destructive, open-world.
+_EXTERNAL_RO = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    openWorldHint=True,
 )
 
 
@@ -292,6 +321,194 @@ def verify_pack_signature(
         )
     except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
         response = VerifySignatureResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
+# --------------------------------------------------------------------------
+# Opt-in cloud / external-verifier tools (require an optional extra; each
+# reaches an external system, unlike every tool above). See
+# :mod:`iso20022_evidence_pack_mcp.cloud`.
+# --------------------------------------------------------------------------
+
+
+@server.tool(title="Sign a pack with AWS KMS", annotations=_EXTERNAL)
+def sign_pack_aws_kms(
+    evidence_pack_json: Annotated[
+        str, Field(description="An evidence pack as raw JSON text.")
+    ],
+    key_arn: Annotated[
+        str, Field(description="The ARN of the KMS SIGN_VERIFY key.")
+    ],
+    aws_region: Annotated[
+        str, Field(default="us-east-1", description="The AWS region.")
+    ] = "us-east-1",
+) -> dict[str, Any]:
+    """Sign a pack's SHA-256 canonical digest with AWS KMS.
+
+    **Requires the ``[aws]`` extra** (``pip install
+    iso20022-evidence-pack-mcp[aws]``) and **reaches AWS KMS over the
+    network** -- unlike the closed-world tools, this one has a network
+    surface. The private key never leaves KMS; the tool submits only the
+    pack's digest. Returns the pack with an ``aws_kms_signature`` block
+    attached.
+
+    Args:
+        evidence_pack_json: The evidence pack to sign, as JSON text.
+        key_arn: The ARN of the KMS ``SIGN_VERIFY`` key.
+        aws_region: The AWS region hosting the key.
+    """
+    try:
+        signed_pack, block = cloud.sign_pack_aws_kms(
+            evidence_pack_json, key_arn, aws_region
+        )
+        response = AwsKmsSignResponse(
+            signed_pack=signed_pack, aws_kms_signature=block
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = AwsKmsSignResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
+@server.tool(title="Sign a pack with Vault Transit", annotations=_EXTERNAL)
+def sign_pack_vault(
+    evidence_pack_json: Annotated[
+        str, Field(description="An evidence pack as raw JSON text.")
+    ],
+    vault_url: Annotated[
+        str, Field(description="The base URL of the Vault server.")
+    ],
+    key_name: Annotated[
+        str, Field(description="The Transit key name to sign with.")
+    ],
+    token: Annotated[str, Field(description="The Vault access token.")],
+) -> dict[str, Any]:
+    """Sign a pack's canonical bytes with HashiCorp Vault Transit.
+
+    **Requires the ``[vault]`` extra** (``pip install
+    iso20022-evidence-pack-mcp[vault]``) and **reaches a Vault server over the
+    network** -- unlike the closed-world tools, this one has a network
+    surface. POSTs to ``/v1/transit/sign/{key_name}`` and returns the pack
+    with a ``vault_signature`` block attached.
+
+    Args:
+        evidence_pack_json: The evidence pack to sign, as JSON text.
+        vault_url: The base URL of the Vault server.
+        key_name: The Transit key to sign with.
+        token: The Vault access token.
+    """
+    try:
+        signed_pack, block = cloud.sign_pack_vault(
+            evidence_pack_json, vault_url, key_name, token
+        )
+        response = VaultSignResponse(
+            signed_pack=signed_pack, vault_signature=block
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = VaultSignResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
+@server.tool(title="Export a pack to Amazon S3", annotations=_EXTERNAL)
+def export_pack_to_s3(
+    signed_pack_json: Annotated[
+        str, Field(description="A signed evidence pack as raw JSON text.")
+    ],
+    s3_uri: Annotated[
+        str, Field(description="Destination of the form s3://bucket/key.")
+    ],
+) -> dict[str, Any]:
+    """Upload a signed evidence pack to Amazon S3.
+
+    **Requires the ``[aws]`` extra** (``pip install
+    iso20022-evidence-pack-mcp[aws]``) and **reaches AWS S3 over the
+    network** -- unlike the closed-world tools, this one has a network
+    surface. Only the ``s3://`` scheme is supported; ``gs://`` / ``az://``
+    return a clear error. Returns the object's ``bucket``, ``key``, and
+    ``etag``.
+
+    Args:
+        signed_pack_json: The signed pack to upload, as JSON text.
+        s3_uri: The destination, of the form ``s3://bucket/key``.
+    """
+    try:
+        location = cloud.export_pack_to_s3(signed_pack_json, s3_uri)
+        response = S3ExportResponse(
+            bucket=location["bucket"],
+            key=location["key"],
+            etag=location["etag"],
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = S3ExportResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
+@server.tool(title="Verify SLSA provenance", annotations=_EXTERNAL_RO)
+def verify_slsa_provenance(
+    artifact_path: Annotated[
+        str, Field(description="Path to the artifact to verify.")
+    ],
+    provenance_path: Annotated[
+        str, Field(description="Path to the SLSA provenance attestation.")
+    ],
+) -> dict[str, Any]:
+    """Verify an artifact's SLSA provenance with ``slsa-verifier``.
+
+    **Reaches an external system**: shells out to a locally installed
+    ``slsa-verifier`` binary (which may fetch metadata). No optional Python
+    extra is required, but the binary must be on ``PATH`` -- otherwise the
+    tool returns an ``EP_EXTERNAL_TOOL`` error.
+
+    Args:
+        artifact_path: Path to the artifact whose provenance is checked.
+        provenance_path: Path to the SLSA provenance attestation.
+    """
+    try:
+        verified, output = cloud.verify_slsa_provenance(
+            artifact_path, provenance_path
+        )
+        response = SlsaVerifyResponse(verified=verified, output=output)
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = SlsaVerifyResponse(error=_as_detail(exc))
+    return response.model_dump(mode="json")
+
+
+@server.tool(title="Verify a cosign signature", annotations=_EXTERNAL_RO)
+def verify_cosign_signature(
+    image_ref: Annotated[
+        str, Field(description="The container image reference to verify.")
+    ],
+    certificate_identity: Annotated[
+        str | None,
+        Field(default=None, description="Keyless certificate identity."),
+    ] = None,
+    certificate_oidc_issuer: Annotated[
+        str | None,
+        Field(default=None, description="Keyless OIDC issuer URL."),
+    ] = None,
+) -> dict[str, Any]:
+    """Verify a container image signature with ``cosign``.
+
+    **Reaches an external system**: shells out to a locally installed
+    ``cosign`` binary (which contacts the registry and transparency log). No
+    optional Python extra is required, but the binary must be on ``PATH`` --
+    otherwise the tool returns an ``EP_EXTERNAL_TOOL`` error. For keyless
+    verification, supply ``certificate_identity`` and
+    ``certificate_oidc_issuer``.
+
+    Args:
+        image_ref: The container image reference to verify.
+        certificate_identity: The keyless certificate identity (optional).
+        certificate_oidc_issuer: The keyless OIDC issuer URL (optional).
+    """
+    try:
+        verified, output = cloud.verify_cosign_signature(
+            image_ref,
+            certificate_identity=certificate_identity,
+            certificate_oidc_issuer=certificate_oidc_issuer,
+        )
+        response = CosignVerifyResponse(verified=verified, output=output)
+    except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
+        response = CosignVerifyResponse(error=_as_detail(exc))
     return response.model_dump(mode="json")
 
 

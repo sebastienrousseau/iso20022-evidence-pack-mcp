@@ -24,7 +24,7 @@ checksum.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -216,4 +216,61 @@ class VerifySignatureResponse(BaseModel):
 
     verified: bool = False
     key_id: str = ""
+    error: ErrorDetail | None = None
+
+
+# --------------------------------------------------------------------------
+# Opt-in cloud / external tool responses (require optional extras; each
+# reaches an external system, unlike the closed-world tools above).
+# --------------------------------------------------------------------------
+
+
+class AwsKmsSignResponse(BaseModel):
+    """A pack signed by AWS KMS, with the attached ``aws_kms_signature``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    signed_pack: dict[str, Any] | None = None
+    aws_kms_signature: dict[str, Any] | None = None
+    error: ErrorDetail | None = None
+
+
+class VaultSignResponse(BaseModel):
+    """A pack signed by HashiCorp Vault Transit, with its signature block."""
+
+    model_config = ConfigDict(frozen=True)
+
+    signed_pack: dict[str, Any] | None = None
+    vault_signature: dict[str, Any] | None = None
+    error: ErrorDetail | None = None
+
+
+class S3ExportResponse(BaseModel):
+    """The location and entity tag of a pack exported to Amazon S3."""
+
+    model_config = ConfigDict(frozen=True)
+
+    bucket: str = ""
+    key: str = ""
+    etag: str = ""
+    error: ErrorDetail | None = None
+
+
+class SlsaVerifyResponse(BaseModel):
+    """The result of verifying SLSA provenance with ``slsa-verifier``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verified: bool = False
+    output: str = ""
+    error: ErrorDetail | None = None
+
+
+class CosignVerifyResponse(BaseModel):
+    """The result of verifying an image signature with ``cosign``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verified: bool = False
+    output: Any = None
     error: ErrorDetail | None = None
