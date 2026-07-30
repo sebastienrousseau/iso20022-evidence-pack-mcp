@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -47,10 +47,12 @@ from iso20022_evidence_pack_mcp.errors import (
     EvidencePackError,
     InvalidInputError,
     NoSigningKeyError,
+    SealMismatchError,
 )
 from iso20022_evidence_pack_mcp.models import (
     BuildRequest,
     BuildResponse,
+    EvidencePack,
     RenderRequest,
     RenderResponse,
     SealRequest,
@@ -293,6 +295,130 @@ def verify_pack_signature(
     except Exception as exc:  # noqa: BLE001 - boundary: return data, not trace
         response = VerifySignatureResponse(error=_as_detail(exc))
     return response.model_dump(mode="json")
+
+
+# --------------------------------------------------------------------------
+# Prompts
+# --------------------------------------------------------------------------
+
+
+@server.prompt(
+    title="Audit an evidence pack for readiness and compliance",
+)
+def audit_readiness_compliance(
+    evidence_pack_id: Annotated[
+        str,
+        Field(
+            default="",
+            description=(
+                "Optional identifier or reference of the pack under audit; "
+                "leave empty to assemble a pack from raw inputs first."
+            ),
+        ),
+    ] = "",
+) -> str:
+    """Guide an analyst through a readiness/compliance audit of a pack.
+
+    The guidance teaches the full evidence-pack workflow (build, seal or sign,
+    verify, then render) and asks for a prioritized remediation checklist.
+
+    Args:
+        evidence_pack_id: An optional pack identifier to anchor the audit;
+            when omitted, the guidance covers assembling a pack from scratch.
+    """
+    if evidence_pack_id:
+        subject = f"the evidence pack referenced as `{evidence_pack_id}`"
+        obtain = (
+            f"Locate {subject}. If you hold its readiness (and any "
+            "remediation or simulation) JSON, rebuild it with "
+            "`build_evidence_pack` so the analysis works from a freshly "
+            "sealed artifact."
+        )
+    else:
+        subject = "an ISO 20022 readiness evidence pack"
+        obtain = (
+            "No pack identifier was supplied, so assemble one first: call "
+            "`build_evidence_pack` with the readiness result (and any "
+            "remediation result and simulated bank responses) as JSON text."
+        )
+    return (
+        f"You are auditing {subject} for ISO 20022 readiness and "
+        "compliance. Produce a prioritized remediation checklist backed by "
+        "the pack's own tamper-evident evidence.\n\n"
+        "Follow this workflow end to end:\n"
+        f"1. Obtain the pack. {obtain}\n"
+        "2. Establish integrity before trusting any content. Recompute the "
+        "seal with `seal_pack` and confirm it against the pack's `digest` "
+        "using `verify_seal`. When the pack carries a detached signature, "
+        "also sign or re-check it with `sign_pack` and "
+        "`verify_pack_signature`; treat any mismatch (an `EP_SEAL_MISMATCH` "
+        "or a failed signature) as a blocking finding and stop.\n"
+        "3. Read the human-readable report. Call `render_markdown` and use it "
+        "to review the readiness grade (A >= 90, B >= 75, C >= 50, else F), "
+        "the structural errors, and the profile findings.\n"
+        "4. Assess the gaps. Weigh each structural error and profile finding "
+        "by severity (error > warning > info), then check whether the "
+        "remediation section already resolved it or left it as a residual "
+        "finding.\n\n"
+        "Deliver a remediation checklist ordered by severity. For each item "
+        "give the finding code, its locator, why it blocks compliance, and "
+        "the concrete fix. Close with the readiness grade and an overall "
+        "verdict on whether the pack is audit-ready."
+    )
+
+
+# --------------------------------------------------------------------------
+# Resources
+# --------------------------------------------------------------------------
+
+#: The internal error taxonomy exposed by ``evidence://error-codes``. Each
+#: class contributes its own stable ``code`` and docstring; nothing here is
+#: hand-written, so the resource always mirrors :mod:`errors`.
+_ERROR_CLASSES: tuple[type[EvidencePackError], ...] = (
+    EvidencePackError,
+    InvalidInputError,
+    SealMismatchError,
+    NoSigningKeyError,
+)
+
+
+@server.resource(
+    "evidence://schema",
+    title="Evidence-pack JSON schema",
+    description="The EvidencePack Pydantic model as a JSON schema.",
+    mime_type="application/json",
+)
+def evidence_pack_schema() -> str:
+    """Return the :class:`EvidencePack` contract as a JSON schema.
+
+    Agents can read this to learn the exact shape of a sealed pack (its
+    sections, the grade, and the ``digest`` seal) before building or auditing
+    one.
+    """
+    return json.dumps(EvidencePack.model_json_schema(), indent=2)
+
+
+@server.resource(
+    "evidence://error-codes",
+    title="Evidence-pack error taxonomy",
+    description="The stable error codes returned inside tool payloads.",
+    mime_type="application/json",
+)
+def error_codes() -> str:
+    """Return the stable error taxonomy tools may surface as ``ErrorDetail``.
+
+    Every entry is derived from an :class:`EvidencePackError` subclass, so the
+    codes and explanations match exactly what the tools can return.
+    """
+    taxonomy = [
+        {
+            "code": cls.code,
+            "name": cls.__name__,
+            "explanation": cast(str, cls.__doc__).strip(),
+        }
+        for cls in _ERROR_CLASSES
+    ]
+    return json.dumps(taxonomy, indent=2)
 
 
 def main(argv: list[str] | None = None) -> None:
