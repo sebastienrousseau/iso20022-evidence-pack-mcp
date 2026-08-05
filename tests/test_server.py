@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The FastMCP tool surface, seal determinism, and the ``main`` entry point."""
+"""The MCPServer tool surface, seal determinism, and the ``main`` entry point."""
 
 from __future__ import annotations
 
@@ -384,7 +384,7 @@ def test_main_version_exits(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_main_runs_server(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``main([])`` parses args and hands off to the FastMCP run loop."""
+    """``main([])`` parses args and hands off to the MCPServer run loop."""
     called: list[bool] = []
     monkeypatch.setattr(server_mod.server, "run", lambda: called.append(True))
     server_mod.main([])

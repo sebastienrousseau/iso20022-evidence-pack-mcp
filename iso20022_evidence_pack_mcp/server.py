@@ -27,7 +27,7 @@ data and an ``{"error": ...}``-shaped payload on any failure, never a
 traceback.
 
 Launch as a console script (``iso20022-evidence-pack-mcp``) or configure it in
-an MCP client. The transport is stdio (FastMCP's default).
+an MCP client. The transport is stdio (the SDK's default).
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ import json
 import os
 from typing import Annotated, Any, cast
 
-from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -49,6 +48,7 @@ from iso20022_evidence_pack_mcp import (
     signing,
     tracing,
 )
+from iso20022_evidence_pack_mcp._mcp_compat import build_server
 from iso20022_evidence_pack_mcp.errors import (
     ErrorDetail,
     EvidencePackError,
@@ -77,10 +77,7 @@ from iso20022_evidence_pack_mcp.models import (
     VerifySignatureResponse,
 )
 
-server = FastMCP("iso20022-evidence-pack")
-# FastMCP does not accept a version kwarg; set it so serverInfo.version is
-# coherent with the package version.
-server._mcp_server.version = __version__
+server = build_server("iso20022-evidence-pack", __version__)
 
 # Every tool is a pure, local, deterministic, closed-world transform.
 _LOCAL = ToolAnnotations(

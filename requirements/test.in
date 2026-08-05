@@ -13,7 +13,7 @@ pyjwt[crypto]>=2.10,<3
 httpx>=0.27,<1
 starlette>=1.3.1,<2
 uvicorn>=0.30,<1
-cryptography>=48.0.1,<49
+cryptography>=50.0.0,<51
 # Optional cloud-signing extras (aws=boto3, vault=hvac) and their mock
 # (moto) -- imported lazily by cloud.py and exercised by the mocked
 # tests for sign_pack_aws_kms / sign_pack_vault / export_pack_to_s3.
