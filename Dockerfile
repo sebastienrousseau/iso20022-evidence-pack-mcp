@@ -11,7 +11,7 @@
 # simulated responses, or an existing pack). Nothing extra needs to be present
 # in the runtime environment.
 
-FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS builder
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS builder
 
 WORKDIR /build
 
@@ -29,7 +29,7 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install .
 
 
-FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc
+FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
 
 LABEL org.opencontainers.image.title="iso20022-evidence-pack-mcp" \
       org.opencontainers.image.description="Local MCP server that seals ISO 20022 readiness evidence into tamper-evident, exportable audit packs." \
