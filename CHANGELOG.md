@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2026-08-28
+
+Brings this repository onto the **suite conformance gate**.
+
+### Added
+
+- **`benches/bench_pack_lifecycle.py`** — build, seal, verify and render
+  across finding counts. A pack is the artefact an institution keeps, and
+  a real migration produces thousands of findings, not the handful in the
+  fixtures.
+
+  **Building is linear.** `us/finding` at 5,000 is **0.81x** the cost at
+  10 — flat, so nothing re-serialises what it has already placed.
+
+  **Verification does not leak timing.** `verify_seal` against a tampered
+  pack costs the same as against a good one (ratio ~1.00 across sizes and
+  runs). That property was never measured: a short-circuit that bails out
+  on a mismatched prefix would turn the digest check into an oracle
+  telling an attacker how much of a forged pack was accepted before the
+  difference was found.
+
+  The output says explicitly that the ratio must be read across runs.
+  These are sub-millisecond measurements and a single row lands anywhere
+  between roughly 0.6 and 1.2 on an idle machine — one low reading is
+  noise, not a finding.
+
+  Nothing asserts a timing threshold. CI runs `--quick`, so a benchmark
+  that stops compiling fails the build rather than rotting.
+
+- **`tests/test_suite_conformance.py`** — invariants shared by every
+  repository in the suite, vendored from one canonical copy and
+  checksummed by its own test.
+
+### Changed
+
+- CI lints, formats and runs `benches/` alongside everything else.
+- `tomli` (on 3.10) and `packaging` are named in the dev dependency group.
+  The conformance gate parses `pyproject.toml` and needs both. CI installs
+  from the hash-pinned `requirements/test.txt`, where both are already
+  present, so this changes nothing for the build — it records the
+  requirement for anyone working locally.
+- `tests/test_suite_conformance.py` is excluded from black: it is
+  generated, and the suite uses three different line lengths.
+
 ## [0.0.3] - 2026-08-21
 
 ### Added
