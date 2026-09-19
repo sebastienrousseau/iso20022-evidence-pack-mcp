@@ -11,10 +11,10 @@ readiness result, an optional remediation result, and any simulated bank
 responses into one sealed, exportable audit evidence pack, and lets auditors
 re-seal, verify, and render packs — all without a network surface.
 
-## Where we are (v0.0.2, shipped 2026-07-18)
+## Where we are (v0.0.5, shipped 2026-08-29)
 
-- **6 MCP tools**, each a pure, local, deterministic, closed-world transform
-  that returns typed, JSON-serialisable data and an `{"error": ...}` payload on
+- **11 MCP tools**. Six are pure, local, deterministic, closed-world transforms
+  that return typed, JSON-serialisable data and an `{"error": ...}` payload on
   any failure (never a traceback):
   - `build_evidence_pack` — fold a readiness result (+ optional remediation, +
     optional simulated responses, + metadata) into a graded, sealed pack;
@@ -27,6 +27,12 @@ re-seal, verify, and render packs — all without a network surface.
     key; returns the detached signature, public key, and `key_id`.
   - `verify_pack_signature` — verify a detached Ed25519 signature over a pack's
     canonical bytes against a supplied public key.
+  - Five reach outside the process and are annotated as such (v0.0.3):
+    `sign_pack_aws_kms`, `sign_pack_vault` and `export_pack_to_s3` behind the
+    `[aws]` / `[vault]` extras; `verify_slsa_provenance` and
+    `verify_cosign_signature`.
+- **One prompt and two resources** (v0.0.3): `audit_readiness_compliance`,
+  `evidence://schema` and `evidence://error-codes`.
 - **The deterministic seal**: a SHA-256 digest over the pack's canonical JSON
   (sorted keys, tight separators, the `digest` field excluded), making the
   pack **tamper-evident** — re-sealing identical content yields the identical
@@ -45,12 +51,18 @@ re-seal, verify, and render packs — all without a network surface.
   and an optional `X-MCP-Tenant` header forwarded into the tool-visible context.
 - **Grading**: a readiness score maps to a letter grade (A/B/C/F) folded into
   the pack.
-- **Stdio transport** (FastMCP default): one process per operator, launched
-  by the MCP client, no network surface, no authentication needed.
+- **Transports**: stdio (default; one process per operator, launched by the
+  MCP client, no network surface); the authenticated HTTP transport above;
+  and, unreleased on `main`, streamable HTTP and SSE from the suite's shared
+  command line (`--transport streamable-http|sse`, `--host`, `--port`).
+- **Opt-in OpenTelemetry tracing** (v0.0.3) behind the `[otel]` extra
+  (`--otel-endpoint`).
 - **Supply chain**: 100% line + branch coverage, OpenSSF Scorecard, SLSA
   Build L3 + PEP 740 sigstore attestations on every release, CycloneDX 1.6 +
   SPDX 2.3 + pip-licenses SBOMs on every GitHub release, NIST SP 800-218 SSDF
-  practice mapping in `SECURITY.md`.
+  practice mapping in `SECURITY.md`, the suite conformance gate (v0.0.4), a
+  scheduled release-consistency check against PyPI (v0.0.5), CI on Python 3.10
+  to 3.14.
 
 ## Fast-follow — keyless/PKI signing, storage, entitlement gating
 
