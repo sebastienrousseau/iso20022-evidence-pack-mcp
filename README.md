@@ -7,6 +7,7 @@
 [![Quality][quality-badge]][quality-url]
 [![OpenSSF Scorecard][scorecard-badge]][scorecard-url]
 [![Documentation][docs-badge]][docs-url]
+[![Glama MCP server score][glama-badge]][glama-url]
 
 **A fully local, closed-world [Model Context Protocol (MCP)][mcp] server** that
 compiles ISO 20022 readiness findings, remediation diffs, and simulated bank
@@ -23,8 +24,8 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 > field breaks verification — so an auditor can detect undetected change. There
 > is **no network surface, no sub-servers, and no XML**: every tool is a pure,
 > local, deterministic transform over the JSON structures it is handed.
-> **v0.0.2**, stdio transport (plus an optional authenticated HTTP transport),
-> 6 tools including Ed25519 pack signing, Python 3.10+.
+> **v0.0.5**, stdio transport (plus an optional authenticated HTTP transport),
+> 11 tools including Ed25519 pack signing, Python 3.10+.
 
 ## Contents
 
@@ -493,3 +494,5 @@ Built alongside the servers of the ISO 20022 MCP Suite and the
 [scorecard-url]: https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/iso20022-evidence-pack-mcp
 [tests-badge]: https://img.shields.io/github/actions/workflow/status/sebastienrousseau/iso20022-evidence-pack-mcp/ci.yml?branch=main&label=Tests&style=for-the-badge
 [tests-url]: https://github.com/sebastienrousseau/iso20022-evidence-pack-mcp/actions/workflows/ci.yml
+[glama-badge]: https://glama.ai/mcp/servers/sebastienrousseau/iso20022-evidence-pack-mcp/badges/score.svg
+[glama-url]: https://glama.ai/mcp/servers/sebastienrousseau/iso20022-evidence-pack-mcp
