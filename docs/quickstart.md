@@ -26,7 +26,7 @@ XML. Nothing else needs to be installed.
 ## 2. Launch the server
 
 The package installs an `iso20022-evidence-pack-mcp` console entry point that
-starts the server over stdio (FastMCP's default transport):
+starts the server over stdio (the default transport; `--transport streamable-http` or `sse` for HTTP):
 
 ```sh
 iso20022-evidence-pack-mcp
@@ -51,7 +51,7 @@ Add an entry to `~/Library/Application Support/Claude/claude_desktop_config.json
 }
 ```
 
-Restart Claude Desktop. The 4 tools are now available in any chat.
+Restart Claude Desktop. The 11 tools are now available in any chat.
 
 ### Other clients (Cursor, Continue, generic stdio MCP clients)
 
@@ -109,7 +109,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## 6. The 4 tools at a glance
+## 6. The 11 tools at a glance
 
 | Tool | What it does |
 | --- | --- |
