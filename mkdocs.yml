@@ -36,6 +36,7 @@ nav:
   - Quickstart: quickstart.md
   - Evidence packs: evidence-packs.md
   - HTTP transport: transport.md
+  - Decisions: adr/index.md
 
 markdown_extensions:
   - admonition
