@@ -24,7 +24,7 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 > field breaks verification — so an auditor can detect undetected change. There
 > is **no network surface, no sub-servers, and no XML**: every tool is a pure,
 > local, deterministic transform over the JSON structures it is handed.
-> **v0.0.5**, stdio transport (plus an optional authenticated HTTP transport),
+> **v0.0.5**, stdio, streamable HTTP, SSE or authenticated streamable HTTP,
 > 11 tools including Ed25519 pack signing, Python 3.10+.
 
 ## Contents
@@ -33,6 +33,7 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 - [The ISO 20022 MCP Suite](#the-iso-20022-mcp-suite)
 - [Install](#install)
 - [Quick Start](#quick-start)
+- [Transports](#transports) — stdio, streamable HTTP (2026-07-28 and 2025-11-25), SSE and authenticated HTTP from one command line
 - [Tools](#tools)
 - [HTTP transport & authentication](#http-transport--authentication)
 - [Signing evidence packs](#signing-evidence-packs)
@@ -212,6 +213,34 @@ async def main() -> None:
 
 
 asyncio.run(main())
+```
+
+## Transports
+
+One command line, four transports:
+
+| Command | Transport | Endpoint | Protocol revisions |
+| :--- | :--- | :--- | :--- |
+| `iso20022-evidence-pack-mcp` | stdio | the client spawns the process | 2026-07-28, 2025-11-25 |
+| `iso20022-evidence-pack-mcp --transport streamable-http` | Streamable HTTP | `http://127.0.0.1:8000/mcp` | 2026-07-28 (stateless, `server/discover`) and 2025-11-25 (`initialize`, `Mcp-Session-Id`) on the same endpoint; responses stream as server-sent events, `GET` opens the server-to-client stream |
+| `iso20022-evidence-pack-mcp --transport sse` | HTTP+SSE (2024-11-05) | `http://127.0.0.1:8000/sse` and `/messages/` | for clients that still expect the older transport |
+| `iso20022-evidence-pack-mcp --transport http` | Authenticated streamable HTTP (see [`http/transport.py`](iso20022_evidence_pack_mcp/http/transport.py)) | `http://127.0.0.1:8080/mcp` (`--bind`) | OAuth 2.1 (RFC 9728) or a static dev-mode bearer token, `X-MCP-Tenant` tenant scoping |
+
+`--host` and `--port` change the bind address of `streamable-http` and
+`sse` (defaults `127.0.0.1` and `8000`). Those two carry no
+authentication of their own: bind loopback, or put the server behind a
+gateway you trust before binding a routable address; `--transport http`
+is the authenticated option. Every release is verified over streamable
+HTTP with [scout](https://github.com/sebastienrousseau/scout) in both
+protocol eras and over SSE with the MCP SDK client; see
+[ADR 0001](docs/adr/0001-three-transports-one-command-line.md).
+
+```json
+{
+  "mcpServers": {
+    "iso20022-evidence-pack": { "url": "http://127.0.0.1:8000/mcp" }
+  }
+}
 ```
 
 ## Tools
@@ -450,6 +479,9 @@ Vulnerability Reporting, not public issues.
 - [`SUPPORT.md`](SUPPORT.md) — how to get help
 - [`ROADMAP.md`](ROADMAP.md) — what's next (keyless/PKI signing, long-term storage, premium entitlement)
 - [`MAINTAINERS.md`](MAINTAINERS.md) — who can merge
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — module map, transports, extension points
+- [`RELEASING.md`](RELEASING.md) — what merits a release and how one is cut
+- [`docs/adr/`](docs/adr/index.md) — architecture decision records
 - [`docs/quickstart.md`](docs/quickstart.md) — 10-minute install → first conversation
 - [`docs/evidence-packs.md`](docs/evidence-packs.md) — the pack schema, the SHA-256 sealing model, Ed25519 signing, and the readiness → evidence pipeline
 - [`docs/transport.md`](docs/transport.md) — the optional HTTP transport and OAuth 2.1 (RFC 9728) authentication

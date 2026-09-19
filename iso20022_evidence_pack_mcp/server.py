@@ -42,6 +42,8 @@ from pydantic import Field
 
 from iso20022_evidence_pack_mcp import (
     __version__,
+    _cli,
+    _transports,
     builder,
     cloud,
     report,
@@ -648,11 +650,15 @@ def error_codes() -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Run the MCP server over stdio (default) or streamable HTTP.
+    """Run the MCP server over stdio (default), streamable HTTP or SSE.
 
     ``--transport=http`` serves the authenticated streamable-HTTP transport
     (OAuth 2.1 resource server, or a static dev-mode bearer token); see
-    :mod:`iso20022_evidence_pack_mcp.http.transport`.
+    :mod:`iso20022_evidence_pack_mcp.http.transport`. ``--transport
+    streamable-http`` and ``--transport sse`` serve the suite's shared
+    transports on ``--host``/``--port`` instead, without authentication;
+    see :mod:`iso20022_evidence_pack_mcp._cli` and
+    :mod:`iso20022_evidence_pack_mcp._transports`.
 
     ``--otel-endpoint`` (or ``OTEL_EXPORTER_OTLP_ENDPOINT``) opts into
     OpenTelemetry tracing of tool calls; it requires the ``[otel]`` extra and
@@ -661,18 +667,37 @@ def main(argv: list[str] | None = None) -> None:
     """
     parser = argparse.ArgumentParser(
         prog="iso20022-evidence-pack-mcp",
-        description="ISO 20022 evidence-pack MCP server.",
+        description=(
+            f"iso20022-evidence-pack-mcp {__version__}: an MCP server. "
+            "Speaks stdio by default; --transport=http serves "
+            "authenticated streamable HTTP (OAuth 2.1 resource server, or "
+            "a static dev-mode bearer token); --transport=streamable-http "
+            "and --transport=sse serve the suite's unauthenticated HTTP "
+            "transports on --host/--port."
+        ),
+        # ``_cli.add_arguments`` defines ``--transport`` with the
+        # suite's three choices; the definition below replaces it with
+        # the four this server speaks while keeping ``--host``/``--port``.
+        conflict_handler="resolve",
     )
     parser.add_argument(
         "--version",
         action="version",
         version=f"iso20022-evidence-pack-mcp {__version__}",
     )
+    _cli.add_arguments(parser)
     parser.add_argument(
         "--transport",
-        choices=("stdio", "http"),
+        choices=("stdio", "http", *_transports.TRANSPORTS[1:]),
         default="stdio",
-        help="Transport to serve (default: stdio).",
+        help=(
+            "MCP transport to serve: 'stdio' (default; launched by a "
+            "local MCP client), 'http' (authenticated streamable HTTP, "
+            "see transport.py: OAuth 2.1 or a bearer token on --bind), "
+            "'streamable-http' (HTTP at --host:--port/mcp, protocol "
+            "2026-07-28 and 2025-11-25, no auth) or 'sse' (the older "
+            "HTTP+SSE transport at /sse and /messages/, no auth)."
+        ),
     )
     parser.add_argument(
         "--bind",
@@ -697,8 +722,8 @@ def main(argv: list[str] | None = None) -> None:
         from iso20022_evidence_pack_mcp.http import transport
 
         transport.run_http(server, args.bind or transport.DEFAULT_BIND)
-    else:
-        server.run()
+        return
+    _transports.run(server, args.transport, args.host, args.port)
 
 
 if __name__ == "__main__":  # pragma: no cover
