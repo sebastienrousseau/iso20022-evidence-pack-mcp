@@ -5,10 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.0.6] - 2026-10-03
 
 ### Added
 
+- Framework adapters in `iso20022_evidence_pack_mcp.adapters` (`as_langchain_tools`,
+  `as_crewai_tools`, `as_llamaindex_tools`) exposing all registered server
+  tools to agent frameworks lazily without heavy mandatory runtime dependencies.
+- Added `AGENTS.md` defining repository invariants and verification gates.
+- Normalized dual licensing to full Apache 2.0 text and added `LICENSES/` tree.
 - `--transport streamable-http` and `--transport sse`, with `--host` and
   `--port`. Streamable HTTP serves both current protocol revisions
   (2026-07-28 stateless with `server/discover`, and 2025-11-25 with the
@@ -26,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release several versions old, so the directory listings advertised a stale
   install; both are stamped to the shipped version and a CI job now fails
   when they, the package version and the changelog disagree.
+- Normalized Glama license metadata to dual license `Apache-2.0 OR MIT`.
 
 ## [0.0.5] - 2026-08-29
 

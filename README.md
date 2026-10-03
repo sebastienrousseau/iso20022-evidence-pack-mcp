@@ -24,7 +24,7 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 > field breaks verification — so an auditor can detect undetected change. There
 > is **no network surface, no sub-servers, and no XML**: every tool is a pure,
 > local, deterministic transform over the JSON structures it is handed.
-> **v0.0.5**, stdio, streamable HTTP, SSE or authenticated streamable HTTP,
+> **v0.0.6**, stdio, streamable HTTP, SSE or authenticated streamable HTTP,
 > 11 tools including Ed25519 pack signing, Python 3.10+.
 
 ## Contents

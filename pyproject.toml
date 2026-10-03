@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "iso20022-evidence-pack-mcp"
-version = "0.0.5"
+version = "0.0.6"
 description = "MCP server that compiles ISO 20022 readiness findings, remediation diffs, and simulated responses into sealed audit evidence packs."
 authors = ["Sebastien Rousseau <sebastian.rousseau@gmail.com>"]
 license = "Apache-2.0 OR MIT"
@@ -158,7 +158,16 @@ module = "mcp.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "hvac.*", "moto.*", "opentelemetry.*"]
+module = [
+    "boto3.*",
+    "botocore.*",
+    "hvac.*",
+    "moto.*",
+    "opentelemetry.*",
+    "langchain_core.*",
+    "crewai.*",
+    "llama_index.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
