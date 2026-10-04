@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 OR MIT -->
+
 # iso20022-evidence-pack-mcp: Sealed ISO 20022 Audit Evidence Packs
 
 [![PyPI Version][pypi-badge]][07]
@@ -8,6 +10,11 @@
 [![OpenSSF Scorecard][scorecard-badge]][scorecard-url]
 [![Documentation][docs-badge]][docs-url]
 [![Glama MCP server score][glama-badge]][glama-url]
+
+<p align="center">
+  <img src=".github/demo.gif" alt="iso20022-evidence-pack-mcp Demo" width="100%" />
+</p>
+
 
 **A fully local, closed-world [Model Context Protocol (MCP)][mcp] server** that
 compiles ISO 20022 readiness findings, remediation diffs, and simulated bank
@@ -24,7 +31,7 @@ in the [ISO 20022 MCP Suite](#the-iso-20022-mcp-suite).
 > field breaks verification — so an auditor can detect undetected change. There
 > is **no network surface, no sub-servers, and no XML**: every tool is a pure,
 > local, deterministic transform over the JSON structures it is handed.
-> **v0.0.5**, stdio, streamable HTTP, SSE or authenticated streamable HTTP,
+> **v0.0.6**, stdio, streamable HTTP, SSE or authenticated streamable HTTP,
 > 11 tools including Ed25519 pack signing, Python 3.10+.
 
 ## Contents
