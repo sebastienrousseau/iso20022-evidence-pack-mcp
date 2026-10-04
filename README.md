@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 OR MIT -->
+
 # iso20022-evidence-pack-mcp: Sealed ISO 20022 Audit Evidence Packs
 
 [![PyPI Version][pypi-badge]][07]
