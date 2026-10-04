@@ -1,7 +1,12 @@
-.PHONY: help install dev test lint format type-check security pip-compile clean examples check
+.PHONY: help install dev test lint format type-check security pip-compile clean examples check demo
 
 PYTHON ?= python3
 POETRY ?= poetry
+VHS ?= $(shell which vhs 2>/dev/null || echo /opt/homebrew/bin/vhs)
+
+demo: ## Generate terminal demo animation gif using vhs
+	$(VHS) .github/demo.tape
+
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

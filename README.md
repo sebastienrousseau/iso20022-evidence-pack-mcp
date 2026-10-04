@@ -9,6 +9,11 @@
 [![Documentation][docs-badge]][docs-url]
 [![Glama MCP server score][glama-badge]][glama-url]
 
+<p align="center">
+  <img src=".github/demo.gif" alt="iso20022-evidence-pack-mcp Demo" width="100%" />
+</p>
+
+
 **A fully local, closed-world [Model Context Protocol (MCP)][mcp] server** that
 compiles ISO 20022 readiness findings, remediation diffs, and simulated bank
 responses into one **sealed, exportable audit evidence pack**. It is the audit
